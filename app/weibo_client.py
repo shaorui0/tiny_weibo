@@ -4,19 +4,56 @@ import heapq
 import random
 
 NEW_FEED_NUMBER = 10
+class Blog():
+    # TODO 分布式应该考虑哪些东西？blog id 应该是自动增长的
+    def __init__(self, blog_id, **kargs):
+        self._blog_id = blog_id
+        self._blog_info = dict()
+        self._blog_info.update(kargs)
+    
+    def _update_attr(self, key, value):
+        self._blog_info.update({key: value})
+    
+    def _get_info(self, key):
+        try:
+            self._blog_info[key]
+        except:
+            raise KeyError(f"The attribute does not exist in the blog[{key}]")
+    
+    # TODO 属性函数
+    def blog_id(self):
+        return self._blog_id
 
+
+from collections import deque
+import itertools
 class User():
+    # user id 应该是自动增长的
     def __init__(self, uid):
         self._id = uid
-        self.posted_blogs = list()
+        self.posted_blogs = deque()
+        self.blogs = dict() # TODO 持久化
         self.following = set()
     
-    def add_blog(self, ts, blog_id):
+    def post_blog(self, ts, blog_id):
         # big root heap, order by timestamp
-        heapq.heappush(self.posted_blogs, (-1 * ts, blog_id))
+        # heapq.heappush(self.posted_blogs, (-1 * ts, blog_id))
+        self.posted_blogs.append(blog_id)
+        self.blogs[blog_id] = Blog(blog_id, ts=-1 * ts)
+        #self.posted_blogs.
+        # TODO 没必要，本来就是按时间插入进去的
+        # 什么样的数据结构？本质就是数据结构的组织
+        # 关于这种无非就是一直append、一直delete
+        # 每个blog_id会有一些评论，然后。。。做一个这样的东西，总是会考虑很多东西，比如weibo里面
 
     def delete_blog(self, blog_id):
-        pass
+        if blog_id not in self.blogs:
+            raise KeyError(f"blog_id[{blog_id}] not in this user[{self._id}]")
+        
+        index_blog_id = self.posted_blogs.index(blog_id)
+        del self.posted_blogs[index_blog_id]
+        
+        del self.blogs[blog_id]
 
     def follow_user(self, uid):
         if self._id == uid:
@@ -38,39 +75,38 @@ class User():
 
         if len(self.posted_blogs) <= top_k:
             return self.posted_blogs
-        
-        tmp_total_blogs = self.posted_blogs[:]
-        tmp = list()
-        for i in range(0, top_k):
-            tmp.append(heapq.heappop(tmp_total_blogs))
-        return tmp
+        return deque(itertools.islice(self.posted_blogs, 0, top_k))
 
+    def uid(self):
+        return self._id
 
 class Weibo():
     def __init__(self):
         # all of user in Weibo
         self.users = dict() # map: id => User_id
+        
+    # 创建用户
+    def add_user(self, user):
+        if user.uid() in self.users:
+            raise Exception(f"user {uid} already in Weibo")
+        self.users[user.uid()] = user
 
     def follow(self, follower, followee):
         # check follwer and followee in weibo
         if follower not in self.users:
-            self.users[follower] = User(follower)
-            #raise Exception("follower {} not in Weibo".format(follower))
+            # TODO 你不能关注一个不存在的人，直接报错比较好，不能创建一个僵尸
+            raise Exception(f"follower {follower} not in Weibo")
         if followee not in self.users:
-            self.users[followee] = User(followee)
-            #raise Exception("followee {} not in Weibo".format(followee))
+            raise Exception(f"followee {followee} not in Weibo")
 
         cur_follower = self.get_user(follower)
         cur_follower.follow_user(followee)
 
     def unfollow(self, follower, followee):
-        # check follwer and followee in weibo
         if follower not in self.users:
-            self.users[follower] = User(follower)
-            #raise Exception("follower {} not in Weibo".format(follower))
+            raise Exception(f"follower {follower} not in Weibo")
         if followee not in self.users:
-            self.users[followee] = User(followee)
-            #raise Exception("followee {} not in Weibo".format(followee))
+            raise Exception(f"followee {followee} not in Weibo")
 
         cur_follower = self.get_user(follower)
         cur_follower.unfollow_user(followee)
@@ -103,9 +139,10 @@ class Weibo():
         post blog, add current timestamp and blog id to watch list of current user
         """
         if user_id not in self.users:
-            self.users.update({user_id: User(user_id)})
+            raise Exception(f"user {user_id} not in Weibo")
         ts = datetime.datetime.now().timestamp()
-        self.get_user(user_id).add_blog(ts, blog_id)
+        
+        self.get_user(user_id).post_blog(ts, blog_id)
         print("user [{}] has posted a blog [{}] at [{}]".format(user_id, blog_id, ts))
     
     def get_top_k_followee_latest_posted(self, user_id, top_k):
@@ -197,4 +234,4 @@ def test():
 
 if __name__ == "__main__":
     test_simple()
-    test()
+    #test()
