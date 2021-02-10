@@ -16,11 +16,12 @@ User:
     1. 直接在 blog 表中 sql 查，然后放缓存（**redis-list**）
     2. json/map (id: is_delete)
     3. string(list)
+    4. 不用这个字段，通过blog表进行获取【y】
 - following, text
     - json {user_id: is_unfollowed} # 一致性
 - fans, text
     - json {user_id: is_unfollowed}
-- lastest_post_ts
+- lastest_post_ts, timestamp
 
 
 Blog:
@@ -30,8 +31,17 @@ Blog:
 - user_id, bigint(for now)
 - content, text
 - is_deleted, char(1)
+- post_date, timestamp
 
 
+Following
+- user_id
+- following_user_id
+
+
+我感觉这种 networking ，用 DB 不太好，感觉可以用 table。
+- 目前用DB
+- TODO 后面改进为 Table
 
 
 #### 设计意图
@@ -118,14 +128,42 @@ Blog:
 
 
 ### （sql 需求）
-sql: 找到follow里面，lastest_post_ts的十个人
+sql: 找到follow里面，lastest_post_ts 的十个人
+
+
+follow_str => follow_list => '(1,2,3,4)'
+我关注的人，按照 lastest_post_ts 排序
+
+"select * from User where user_id in {} order by lastest_post_ts;".format(follow_list_str)
+
+
 sql：for userid in tok_10_user: 找到每个人最近的十条微博，except is_deleted
+
+每个人发的微博（Blog表里面，按照user_id加索引）
+
+select * from Blog where user_id in {} group by user_id HAVING COUNT(user_id) <= 10 order by post_date desc; # TEST，肯定需要用到group by
+
+找到每个用户的前10个，而不是一个用户的前是个
+
+
 于是乎，目前就有了一百个（可以加到cache里面进行增量） TODO 后面再说（并且对比性能）
 - blog_id
 - user_id
 - post_ts
 - content
 
+
+##### diff
+
+【重要】有了数据之后进行测试
+直接sql获取这些用户的前十（整体前十）
+sql获取每个人的前十，然后「代码」对比数据
+    - 一次获取一百条
+    - 代码for循环 10 * 10
+
+- 尝试直接用 sql
+- 尝试 sql + 代码
+- 看看效果
 
 ### 关于读写问题
 
